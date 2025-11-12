@@ -181,7 +181,7 @@ app.get("/complaints/all", async (req, res) => {
 
 // Complaints for a specific incharge - WITH STATUS FILTERING
 app.get("/complaints", async (req, res) => {
-  const { incharge, faculty_id, status } = req.query;
+  const { incharge, status } = req.query;
   try {
     let query = "SELECT * FROM complaints WHERE assigned_incharge = $1";
     let params = [incharge];
