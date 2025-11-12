@@ -9,13 +9,39 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// 🛢 PostgreSQL connection
+// ✅ Railway PostgreSQL connection
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "campuscare",  // 🔁 change this
-  password: "postasdf",       // 🔁 change this
-  port: 5432,
+  connectionString: "postgresql://postgres:OsieWRhOsIkMLYVORayEsvMpvptQSqnd@yamanote.proxy.rlwy.net:57585/railway",
+  ssl: {
+    rejectUnauthorized: false // required for Railway’s SSL
+  }
+});
+
+// ✅ Test DB connection
+pool.connect()
+  .then(() => console.log("✅ Connected to Railway PostgreSQL"))
+  .catch(err => console.error("❌ Connection error:", err.stack));
+
+// Example API route to test data
+app.get("/admin", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM admin");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Database query failed");
+  }
+});
+
+// Example API route to list faculty count
+app.get("/faculty/count", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT COUNT(*) AS faculty_count FROM faculty");
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Query failed");
+  }
 });
 
 // ====================== LOGIN ROUTES ======================
@@ -153,35 +179,16 @@ app.get("/complaints/all", async (req, res) => {
   }
 });
 
-// Complaints for a specific incharge OR faculty - WITH STATUS FILTERING
-// 🔄 UPDATED: Now handles both incharge and faculty_id
+// Complaints for a specific incharge - WITH STATUS FILTERING
 app.get("/complaints", async (req, res) => {
   const { incharge, faculty_id, status } = req.query;
-  
   try {
-    let query = "SELECT * FROM complaints WHERE 1=1";
-    let params = [];
-    let paramCount = 1;
+    let query = "SELECT * FROM complaints WHERE assigned_incharge = $1";
+    let params = [incharge];
     
-    // Filter by incharge if provided
-    if (incharge) {
-      query += ` AND assigned_incharge = $${paramCount}`;
-      params.push(incharge);
-      paramCount++;
-    }
-    
-    // Filter by faculty_id if provided
-    if (faculty_id) {
-      query += ` AND faculty_id = $${paramCount}`;
-      params.push(faculty_id);
-      paramCount++;
-    }
-    
-    // Filter by status if provided
     if (status && status !== 'total') {
-      query += ` AND status = $${paramCount}`;
+      query += " AND status = $2";
       params.push(status);
-      paramCount++;
     }
     
     query += " ORDER BY created_at DESC";
@@ -189,7 +196,7 @@ app.get("/complaints", async (req, res) => {
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    console.error("Error fetching complaints:", err);
+    console.error("Error fetching incharge complaints:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -213,6 +220,29 @@ app.get("/complaints/worker/:name", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("Error fetching worker complaints:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Complaints for a faculty - WITH STATUS FILTERING
+app.get("/complaints/faculty/:faculty_id", async (req, res) => {
+  const { faculty_id } = req.params;
+  const { status } = req.query;
+  try {
+    let query = "SELECT * FROM complaints WHERE faculty_id = $1";
+    let params = [faculty_id];
+    
+    if (status && status !== 'total') {
+      query += " AND status = $2";
+      params.push(status);
+    }
+    
+    query += " ORDER BY created_at DESC";
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching faculty complaints:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
